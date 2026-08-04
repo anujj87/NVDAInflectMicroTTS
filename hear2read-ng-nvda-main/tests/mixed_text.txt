@@ -1,0 +1,13 @@
+# Test to check interleaved native and English text. Text is in Punjabi, and requires a Punjabi 
+# voice to test.
+#
+# Test with NVDA, using line by line for each line, as well as continous reading mode 
+# (NVDA+down arrow) for the whole text. Ensure everything is read, as well as no overlapping
+# speech occurs.
+
+ਨਗਰ ਕੌਂਸਲ ਚੋਣਾਂ work around CI ਨੇੜੇ ਆਉਂਦਿਆਂ ਕਸਬਾ ਮਜੀਠਾ  machines
+from the git install ਦੀ ਸਿਆਸਤ ਵਿੱਚ ਹਲਚਲ ਤੇਜ਼ ਹੋ ਗਈ ਹੈ। 
+ਇਸ ਦਰਮਿਆਨ ਇੱਕ ਵੱਡਾ ਸਿਆਸੀ machines
+the ਜਦੋਂ ਵਾਰਡ ਨੰਬਰ 10 ਨਾਲ ਸੰਬੰਧਿਤ ਕਈ ਪ੍ਰਮੁੱਖ install ਪਰਿਵਾਰਾਂ
+ਨੇ ਕਾਂਗਰਸ ਪਾਰਟੀ ਨੂੰ ਛੱਡ ਕੇ ਆਮ 
+ਆਦਮੀ ਪਾਰਟੀ ਦਾ ਦਾਮਨ ਫੜ ਲਿਆ।

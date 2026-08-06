@@ -14,10 +14,10 @@
 # along with phonemizer. If not, see <http://www.gnu.org/licenses/>.
 """Phonemizer version description"""
 
-import importlib
+import importlib.metadata
 
 from phonemizer.backend import (
-    EspeakBackend, EspeakMbrolaBackend, FestivalBackend, SegmentsBackend)
+    EspeakBackend, EspeakMbrolaBackend, FestivalBackend)
 
 
 def _version_as_str(vers):
@@ -52,7 +52,14 @@ def version():
     else:  # pragma: nocover
         unavailable.append('festival')
 
-    if SegmentsBackend.is_available():
+    # the segments backend is optional, it may not be installed at all
+    try:
+        from phonemizer.backend import SegmentsBackend
+        segments_available = SegmentsBackend.is_available()
+    except ImportError:  # pragma: nocover
+        segments_available = False
+
+    if segments_available:
         available.append(
             'segments-' + _version_as_str(SegmentsBackend.version()))
     else:  # pragma: nocover

@@ -14,10 +14,16 @@ from __future__ import annotations
 import addonHandler
 import globalPluginHandler
 from gui.settingsDialogs import NVDASettingsDialog
+from synthDrivers._inflectMicro import providers
 
 from .settingsPanel import InflectMicroTTSSettingsPanel
 
 addonHandler.initTranslation()
+
+# Register the add-on's configuration section (the compute device
+# setting) with NVDA so it is validated and saved per configuration
+# profile.
+providers.ensureSpec()
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):

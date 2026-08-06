@@ -6,6 +6,11 @@ embedded in NVDA 2026.1) and unpacks them into
 ``addon/synthDrivers/_inflectMicro/lib/`` so that the add-on is fully
 offline. Nothing needs to be installed on the user's machine.
 
+The ONNX Runtime dependency is ``onnxruntime-directml``, a single build
+that ships both the CPU and the DirectML (GPU) execution providers
+(still imported as ``onnxruntime``); this is what enables optional GPU
+acceleration while keeping a plain-CPU machine fully supported.
+
 Usage (from the repository root):
 
     python tools/vendor_deps.py
@@ -32,8 +37,11 @@ LIB_DIR = REPO_ROOT / "addon" / "synthDrivers" / "_inflectMicro" / "lib"
 
 #: Runtime packages required by the Inflect Micro v2 ONNX engine and its
 #: text frontend. pip resolves and downloads all transitive dependencies.
+#: onnxruntime-directml is a single ONNX Runtime build shipping both the
+#: CPU and the DirectML (GPU) execution providers, which is what enables
+#: optional GPU acceleration (it still imports as ``onnxruntime``).
 PACKAGES: tuple[str, ...] = (
-	"onnxruntime",
+	"onnxruntime-directml",
 	"numpy",
 	"phonemizer",
 	"num2words",

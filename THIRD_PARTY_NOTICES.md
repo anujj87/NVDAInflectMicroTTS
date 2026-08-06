@@ -18,10 +18,18 @@ code adapted from the model's official inference scripts and from
 Apache License 2.0. A copy of the Apache License is available at
 https://www.apache.org/licenses/LICENSE-2.0
 
-## onnxruntime (ONNX Runtime)
+## onnxruntime-directml (ONNX Runtime with DirectML/GPU support)
 
 - Source: https://github.com/microsoft/onnxruntime
+- DirectML build: https://pypi.org/project/onnxruntime-directml/
 - License: MIT License
+- Note: the add-on vendors the `onnxruntime-directml` wheel, a single
+  ONNX Runtime build that ships both the CPU and the DirectML (GPU)
+  execution providers. When the Compute device setting selects the
+  GPU, inference runs on the Direct3D 12 capable graphics card via
+  Microsoft's DirectML runtime (https://github.com/microsoft/DirectML,
+  MIT License); otherwise the CPU provider is used exactly as with the
+  plain onnxruntime build.
 
 ## numpy
 

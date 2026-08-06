@@ -15,6 +15,11 @@ access is ever needed.
 - **Settings:** voice, rate, rate boost, volume, variation and seed,
   available from NVDA's synth settings ring and the Voice Settings
   dialog.
+- **Compute device:** optional GPU acceleration. NVDA Settings ->
+  Inflect Micro TTS -> Compute device lets you choose between Auto
+  (GPU when available, else CPU), CPU and GPU (DirectML). If the
+  chosen device cannot run the model, the voice automatically falls
+  back to CPU.
 - **Platform:** NVDA 2026.1, 64-bit (CPython 3.13).
 
 ## Installing
@@ -26,6 +31,26 @@ access is ever needed.
 3. In NVDA Settings -> Speech, choose **Inflect Micro v2** from the
    synthesizer list. The first utterance takes a few seconds while the
    model is loaded; afterwards it speaks normally.
+
+## Compute device (GPU acceleration)
+
+By default the add-on renders speech on whatever is fastest on this
+computer ("Auto"): the GPU when a Direct3D 12 capable one is present,
+otherwise the CPU. To control this explicitly, open **NVDA Settings ->
+Inflect Micro TTS** and use the **Compute device** combo box:
+
+- **Auto (best available)** - the default; GPU when available, else CPU.
+- **CPU** - always works.
+- **GPU (DirectML)** - renders the voice on the graphics card. Options
+  that are not usable on this computer are hidden.
+
+GPU acceleration uses DirectML (Microsoft's hardware-accelerated
+DirectX 12 machine-learning runtime), which works on NVIDIA, AMD and
+Intel graphics without installing a CUDA toolkit or GPU drivers beyond
+what Windows already has. The choice is remembered in NVDA's
+configuration and takes effect on the next spoken utterance. If the
+selected device ever fails to run the model, the add-on logs a warning
+and falls back to CPU so speech never breaks.
 
 ## Downloading more voices
 
@@ -89,7 +114,8 @@ Speech is synthesized on a background thread with the bundled
    frontend (num2words + Unidecode + phonemizer using the bundled
    espeak-ng library).
 2. Two small ONNX graphs (duration predictor and waveform decoder) are run
-   with ONNX Runtime on the CPU, producing 24 kHz mono PCM.
+   with ONNX Runtime - on the CPU, or on the GPU via DirectML when the
+   Compute device setting selects it - producing 24 kHz mono PCM.
 3. The audio is streamed through `nvwave.WavePlayer` as it is generated,
    so playback starts before long messages finish synthesizing.
 
@@ -103,9 +129,11 @@ synthesizer is switched or NVDA exits.
   selection.
 - Downloading a voice requires an internet connection (only needed while
   downloading, not while speaking).
-- Text-to-audio conversion is CPU-based. The model synthesizes several
-  times faster than real time on modern hardware, but a short delay is
-  noticeable at the start of the first utterance of a session.
+- Text-to-audio conversion runs on the CPU by default; enabling the GPU
+  (DirectML) compute device accelerates rendering on machines with a
+  Direct3D 12 capable graphics card. A short delay is still noticeable
+  at the start of the first utterance of a session, while the model is
+  loaded and warmed up.
 - Character spelling, phonetic spelling and index commands are not
   supported by the model; NVDA falls back to its built-in handling.
 - `pause` (speech on demand) is not supported yet.

@@ -41,6 +41,7 @@ from typing import Any
 import numpy as np  # pyright: ignore[reportMissingImports]  # vendored in lib/
 import onnxruntime as ort  # pyright: ignore[reportMissingImports]  # vendored in lib/
 
+from . import providers
 from .provision import BUNDLED_VOICE_ID, EngineError, findModelDir
 
 #: Smallest pause appended after the true end of a synthesized message so
@@ -145,7 +146,7 @@ def chunkIndexesToFire(
 ) -> tuple[list[list[int]], list[int]]:
 	"""Map ``(charOffset, index)`` pairs onto synthesized sentence chunks.
 
-	NVDA marks points of interest in an utterance with ``IndexCommand``\ s
+	NVDA marks points of interest in an utterance with ``IndexCommand`` s
 	(for example the end of the utterance, or sayAll's ``lineReached``
 	callback) and expects the synthesizer to fire ``synthIndexReached`` for
 	each one as the audio passes it. Offsets are given in the original text;
@@ -251,6 +252,56 @@ def _importFrontend(artifactDir: Path) -> types.ModuleType:
 	return module
 
 
+def _sessionOptions(provider: str) -> ort.SessionOptions:
+	"""Tuned ONNX Runtime session options for the given provider.
+
+	These are small graphs. 4 intra-op threads cut decode latency by
+	roughly a third compared to 2 (8 oversubscribes and is slower
+	again), which directly shortens the gap between an NVDA action and
+	the first spoken word. Cap at the core count so a small machine is
+	not oversubscribed. Keeping the CPU memory arena and memory pattern
+	enabled lets onnxruntime reuse its intermediate buffers between
+	utterances, which measurably speeds up each decode pass. Graph
+	optimization stays at the extended level for CPU (matching previous
+	behaviour); DirectML benefits from the standard optimizations, so
+	they are raised to full for GPU.
+	"""
+	options = ort.SessionOptions()
+	options.intra_op_num_threads = min(4, os.cpu_count() or 4)
+	options.inter_op_num_threads = 1
+	options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+	options.enable_cpu_mem_arena = True
+	options.enable_mem_pattern = True
+	if provider == providers.CPU:
+		options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+	else:
+		options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+	return options
+
+
+#: The provider the cached engine(s) actually run on. When the configured
+#: provider fails to load (e.g. DirectML without a usable DX12 device) the
+#: engine falls back to CPU and the fallback is remembered for the rest of
+#: the NVDA session, so later loads do not retry the failing provider. The
+#: user's configured choice is NOT rewritten - the settings panel shows the
+#: honest (probed) availability instead. Guarded by _engineLock.
+_sessionProviderFallback: str | None = None
+
+
+def _effectiveProvider() -> str:
+	"""The provider engines should be loaded with right now."""
+	global _sessionProviderFallback
+	if _sessionProviderFallback is not None:
+		return _sessionProviderFallback
+	return providers.getProvider()
+
+
+def _rememberFallback() -> None:
+	"""Remember that the configured provider failed and CPU is in use."""
+	global _sessionProviderFallback
+	_sessionProviderFallback = providers.CPU
+
+
 class OnnxInflectEngine:
 	"""Loads and runs the two-graph ONNX export of the Inflect model."""
 
@@ -262,6 +313,18 @@ class OnnxInflectEngine:
 		self._frontend: Any = None
 		self._sampleRate = 24_000
 		self._addBlank = True
+		#: The execution provider this engine's sessions were created
+		#: with (set by load(); used to detect provider setting changes).
+		self.provider: str = providers.CPU
+		#: Serializes inference on this engine's ONNX sessions. The
+		#: driver's background preload (warmUp) and the speech worker can
+		#: otherwise run the sessions concurrently, which crashes the
+		#: process with a native access violation when the DirectML (GPU)
+		#: provider is active - ONNX Runtime only guarantees thread-safe
+		#: concurrent ``run()`` calls for the CPU provider. One engine has
+		#: one voice and the driver speaks utterances one at a time, so
+		#: serializing costs nothing in practice.
+		self._runLock = threading.Lock()
 
 	@property
 	def sampleRate(self) -> int:
@@ -284,7 +347,14 @@ class OnnxInflectEngine:
 		self._runChunk("w", 1.0, 0.667, np.random.RandomState(0))
 
 	def load(self) -> None:
-		"""Load the ONNX sessions and the text frontend. Blocking."""
+		"""Load the ONNX sessions and the text frontend. Blocking.
+
+		The execution provider is resolved from the add-on's settings
+		("auto" picks the best usable provider). If the chosen
+		accelerator cannot run the model on this machine, the engine
+		falls back to CPU; the fallback is remembered for the rest of the
+		NVDA session so later loads do not retry the failing provider.
+		"""
 		_stubOutUnusedSegmentsBackend()
 		startTime = time.monotonic()
 		try:
@@ -293,34 +363,60 @@ class OnnxInflectEngine:
 			self._addBlank = bool(config["data"]["add_blank"])
 			self._frontend = _importFrontend(self._artifactDir)
 			_installCachedPhonemizer(self._frontend)
-			# These are small graphs. 4 intra-op threads cut decode latency
-			# by roughly a third compared to 2 (8 oversubscribes and is
-			# slower again), which directly shortens the gap between an NVDA
-			# action and the first spoken word. Cap at the core count so a
-			# small machine is not oversubscribed. Keeping the CPU memory
-			# arena and memory pattern enabled lets onnxruntime reuse its
-			# intermediate buffers between utterances, which measurably
-			# speeds up each decode pass.
-			options = ort.SessionOptions()
-			options.intra_op_num_threads = min(4, os.cpu_count() or 4)
-			options.inter_op_num_threads = 1
-			options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-			options.enable_cpu_mem_arena = True
-			options.enable_mem_pattern = True
-			options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
-			self._durationSess = ort.InferenceSession(
-				str(self._artifactDir / "onnx" / "duration.onnx"),
-				sess_options=options,
-				providers=["CPUExecutionProvider"],
-			)
-			self._decodeSess = ort.InferenceSession(
-				str(self._artifactDir / "onnx" / "decode.onnx"),
-				sess_options=options,
-				providers=["CPUExecutionProvider"],
-			)
 		except Exception as exc:
 			raise EngineError(f"Failed to load the Inflect Micro v2 model: {exc}") from exc
-		_logger.debug("Model loaded in %.2fs", time.monotonic() - startTime)
+		provider = _effectiveProvider()
+		try:
+			self._createSessions(provider)
+		except Exception as exc:
+			if provider == providers.CPU:
+				raise EngineError(f"Failed to load the Inflect Micro v2 model: {exc}") from exc
+			# The chosen accelerator could not run the model on this
+			# machine (e.g. DirectML without a usable DX12 device). Fall
+			# back to CPU so speech keeps working; remember the fallback
+			# for the rest of the session so later loads do not retry the
+			# failing provider on every utterance.
+			failedProvider = provider
+			_rememberFallback()
+			provider = providers.CPU
+			try:
+				self._createSessions(provider)
+			except Exception as cpuExc:
+				raise EngineError(f"Failed to load the Inflect Micro v2 model: {cpuExc}") from cpuExc
+			_logger.warning(
+				"Inflect Micro TTS: provider %s failed to load the model; falling back to CPU (%s)",
+				failedProvider,
+				exc,
+			)
+		self.provider = provider
+		_logger.debug(
+			"Model loaded in %.2fs using provider %s",
+			time.monotonic() - startTime,
+			provider,
+		)
+
+	def _createSessions(self, provider: str) -> None:
+		"""Create both ONNX sessions with the given provider. Blocking."""
+		options = _sessionOptions(provider)
+		ortProviders = providers.ortProvidersFor(provider)
+		self._durationSess = ort.InferenceSession(
+			str(self._artifactDir / "onnx" / "duration.onnx"),
+			sess_options=options,
+			providers=ortProviders,
+		)
+		self._decodeSess = ort.InferenceSession(
+			str(self._artifactDir / "onnx" / "decode.onnx"),
+			sess_options=options,
+			providers=ortProviders,
+		)
+		if provider != providers.CPU:
+			# DirectML can silently skip the requested provider when no
+			# usable DX12 device exists; only sessions that actually
+			# adopted it count as GPU-accelerated.
+			if "DmlExecutionProvider" not in self._durationSess.get_providers() or (
+				"DmlExecutionProvider" not in self._decodeSess.get_providers()
+			):
+				raise EngineError("The DirectML provider was not adopted by the ONNX session.")
 
 	def _tokens(self, text: str) -> np.ndarray:
 		"""Convert text to the integer token sequence for the model."""
@@ -349,26 +445,37 @@ class OnnxInflectEngine:
 		return normalized, splitText(normalized)
 
 	def _runChunk(self, chunk: str, speed: float, variation: float, rng: np.random.RandomState) -> np.ndarray:
-		"""Run one sentence chunk through both ONNX graphs."""
+		"""Run one sentence chunk through both ONNX graphs.
+
+		The two ``run()`` calls are serialized with ``_runLock``: the
+		driver's preload thread warms the engine up while the speech
+		worker may already be synthesizing, and the DirectML (GPU)
+		provider crashes with a native access violation when the same
+		sessions are run from two threads at once (the CPU provider is
+		thread-safe, DirectML is not). Serializing makes the two never
+		overlap. The text frontend is not covered by this lock - espeak-ng
+		has its own (``_frontendLock``) and it is not the crash source.
+		"""
 		tokens = self._tokens(chunk)
 		lengths = np.asarray([tokens.shape[1]], dtype=np.int64)
 		lengthScale = np.asarray(1.0 / speed, dtype=np.float32)
-		mPExp, logsPExp, yMask = self._durationSess.run(
-			None,
-			{"tokens": tokens, "lengths": lengths, "length_scale": lengthScale},
-		)
-		zpNoise = rng.standard_normal(mPExp.shape).astype(np.float32)
-		noiseScale = np.asarray(variation, dtype=np.float32)
-		(waveform,) = self._decodeSess.run(
-			None,
-			{
-				"m_p_exp": mPExp,
-				"logs_p_exp": logsPExp,
-				"y_mask": yMask,
-				"zp_noise": zpNoise,
-				"noise_scale": noiseScale,
-			},
-		)
+		with self._runLock:
+			mPExp, logsPExp, yMask = self._durationSess.run(
+				None,
+				{"tokens": tokens, "lengths": lengths, "length_scale": lengthScale},
+			)
+			zpNoise = rng.standard_normal(mPExp.shape).astype(np.float32)
+			noiseScale = np.asarray(variation, dtype=np.float32)
+			(waveform,) = self._decodeSess.run(
+				None,
+				{
+					"m_p_exp": mPExp,
+					"logs_p_exp": logsPExp,
+					"y_mask": yMask,
+					"zp_noise": zpNoise,
+					"noise_scale": noiseScale,
+				},
+			)
 		return edgeFade(waveform[0, 0].astype(np.float32), self._sampleRate)
 
 	def _pausePiece(self, previousChunk: str) -> np.ndarray:
@@ -462,19 +569,35 @@ class OnnxInflectEngine:
 #: instances. Each voice is a complete model directory with its own ONNX
 #: sessions, so switching voices keeps every already-loaded voice warm.
 _engines: dict[str, OnnxInflectEngine] = {}
+#: The provider each cached engine was loaded with, keyed by voice id.
+#: A change of the compute device setting reloads the voice on the new
+#: provider. Guarded by _engineLock.
+_engineProviders: dict[str, str] = {}
 _engineLock = threading.Lock()
 
 
 def getEngine(voiceId: str | None = None) -> OnnxInflectEngine:
-	"""Return the cached engine for a voice, loading it on first use. Blocking."""
+	"""Return the cached engine for a voice, loading it on first use. Blocking.
+
+	Engines are cached per voice and per execution provider: changing the
+	compute device in the add-on settings discards the cached sessions so
+	the next utterance loads with the new provider.
+	"""
 	if voiceId is None:
 		voiceId = BUNDLED_VOICE_ID
 	with _engineLock:
 		engine = _engines.get(voiceId)
+		if engine is not None and _engineProviders.get(voiceId) != _effectiveProvider():
+			# The compute device setting changed (or the previous load fell
+			# back to CPU and the configured provider is now usable again);
+			# drop the cached sessions so they reload on the new provider.
+			_engines.pop(voiceId, None)
+			engine = None
 		if engine is None:
 			engine = OnnxInflectEngine(findModelDir(voiceId))
 			engine.load()
 			_engines[voiceId] = engine
+			_engineProviders[voiceId] = engine.provider
 		return engine
 
 
@@ -483,5 +606,7 @@ def releaseEngine(voiceId: str | None = None) -> None:
 	with _engineLock:
 		if voiceId is None:
 			_engines.clear()
+			_engineProviders.clear()
 		else:
 			_engines.pop(voiceId, None)
+			_engineProviders.pop(voiceId, None)

@@ -30,18 +30,19 @@ addon_info = AddonInfo(
 The model, the ONNX Runtime and all other dependencies are bundled with the add-on,
 so the voice works fully offline.
 Speaks English with a fixed male voice at 24 kHz and offers rate, rate
-boost, volume, variation and seed settings."""
+boost, volume, variation and seed settings, plus optional GPU
+acceleration via DirectML (Auto/CPU/GPU compute device choice)."""
 	),
 	# version
-	addon_version="2026.1.0",
+	addon_version="2026.1.2",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
 	addon_changelog=_(
-		"""Initial release of NVDAInflectMicroTTS for NVDA 2026.1.
-Provides a single English male voice driven by the Inflect Micro v2 ONNX model (24 kHz).
-All model files and Python dependencies (ONNX Runtime, numpy, phonemizer and friends)
-are bundled with the add-on for fully offline operation.
-Settings: rate, volume, variation and seed."""
+		"""Fixed a crash (native access violation) that could occur right after
+selecting the Inflect Micro v2 synthesizer when GPU acceleration was active:
+the background preload and the speech worker could run the DirectML sessions
+concurrently, which the DirectML provider does not tolerate. Model inference
+is now serialized, so the preload and the first utterance never overlap."""
 	),
 	# Author(s)
 	# TODO: replace with your name and contact email before publishing.

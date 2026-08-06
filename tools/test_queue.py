@@ -123,6 +123,10 @@ class SynthDriver:
 	def RateSetting(cls):
 		return ("rate",)
 
+	@classmethod
+	def RateBoostSetting(cls):
+		return ("rateBoost",)
+
 	def __init__(self):
 		pass
 

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Fixed a crash (native access violation) that could occur right after
+selecting the synthesizer while GPU acceleration was active: the
+background preload (warm-up inference) and the speech worker could run
+the DirectML sessions concurrently, which the DirectML provider does not
+tolerate (the CPU provider does). Model inference is now serialized per
+engine, so the preload and the first utterance never overlap.
+- Added optional GPU acceleration. The add-on now bundles
+  onnxruntime-directml, a single ONNX Runtime build with both the CPU
+  and the DirectML (GPU) execution providers, and a new "Compute
+  device" setting (NVDA Settings -> Inflect Micro TTS) chooses between
+  Auto (GPU when available, else CPU), CPU and GPU. The voice always
+  falls back to CPU if the selected device cannot run the model.
 - Added NVDA's Rate boost setting (Voice Settings dialog and synth
 settings ring): with rate boost enabled, the rate range's top end is
 extended from 2.0x to 4.0x speech speed, so the same rate position

@@ -23,9 +23,20 @@ from gui import guiHelper
 from gui.settingsDialogs import SettingsPanel
 from logHandler import log
 
-from synthDrivers._inflectMicro import provision, voices
+from synthDrivers._inflectMicro import providers, provision, voices
 
 addonHandler.initTranslation()
+
+
+#: Human-readable labels for the compute device choices shown in the
+#: settings panel. The "auto" entry appears first and is always offered;
+#: the concrete providers are only offered when usable on this machine
+#: (see providers.detectProviders).
+_PROVIDER_LABELS: dict[str, str] = {
+	"auto": _("Auto (best available)"),
+	providers.CPU: _("CPU"),
+	providers.GPU: _("GPU (DirectML)"),
+}
 
 
 class InflectMicroTTSSettingsPanel(SettingsPanel):
@@ -42,6 +53,25 @@ class InflectMicroTTSSettingsPanel(SettingsPanel):
 
 	def makeSettings(self, settingsSizer: wx.BoxSizer) -> None:
 		sHelper = guiHelper.BoxSizerHelper(self, sizer=settingsSizer)
+
+		# -- Compute device (execution provider) ----------------------------
+		deviceGroup = guiHelper.BoxSizerHelper(
+			self,
+			sizer=wx.StaticBoxSizer(wx.StaticBox(self, label=_("Compute device")), wx.VERTICAL),
+		)
+		# Translators: Instructions for the compute device choice.
+		deviceGroup.addItem(
+			wx.StaticText(
+				self,
+				label=_(
+					"Choose which processor renders the voice. Options that are not "
+					"available on this computer are hidden. GPU is fastest for longer text."
+				),
+			)
+		)
+		self.providerChoice = wx.Choice(self, choices=[])
+		deviceGroup.addItem(self.providerChoice)
+		sHelper.addItem(deviceGroup)
 
 		# Translators: Label for the list of voices on this settings panel.
 		self.voicesList = sHelper.addLabeledControl(
@@ -80,13 +110,42 @@ class InflectMicroTTSSettingsPanel(SettingsPanel):
 
 	def onPanelActivated(self) -> None:
 		super().onPanelActivated()
+		self._refreshProviderChoice()
 		self._refreshVoices()
 		self._checkAvailability()
 
 	def onSave(self) -> None:
-		# All actions (download/remove/apply) take effect immediately on
-		# their buttons; there is nothing to defer to the dialog's OK.
-		pass
+		# The compute device choice is a plain config value, so it is
+		# stored here; the engine picks it up on its next load (engines
+		# are reloaded automatically when the provider setting changes).
+		# Written unconditionally: the combo only shows usable options, so
+		# this also corrects a stale configured provider (e.g. "gpu" on a
+		# machine where DirectML turned out to be unusable) back to the
+		# selection the user actually sees.
+		if self.providerChoice.GetSelection() >= 0:
+			provider = self.providerChoice.GetClientData(self.providerChoice.GetSelection())
+			if provider:
+				providers.setSetting("provider", provider)
+		# All other actions (download/remove/apply) take effect immediately
+		# on their buttons; there is nothing to defer to the dialog's OK.
+
+	# ---------------- compute device ----------------
+
+	def _refreshProviderChoice(self) -> None:
+		"""Fill the compute device combo with the usable providers, selecting
+		the configured one."""
+		entries = [("auto", _PROVIDER_LABELS["auto"])]
+		entries.extend((pid, _PROVIDER_LABELS[pid]) for pid in providers.detectProviders())
+		self.providerChoice.SetItems([label for _, label in entries])
+		for index, (pid, _) in enumerate(entries):
+			self.providerChoice.SetClientData(index, pid)
+		active = providers.getSetting("provider", "auto")
+		try:
+			self.providerChoice.SetSelection(
+				next(index for index, (pid, _) in enumerate(entries) if pid == active)
+			)
+		except StopIteration:
+			self.providerChoice.SetSelection(0)
 
 	# ---------------- voice list ----------------
 

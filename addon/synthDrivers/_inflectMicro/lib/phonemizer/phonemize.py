@@ -22,6 +22,7 @@ To use it in your own code, type:
 
 import os
 import sys
+from collections import OrderedDict
 from logging import Logger
 from typing import Optional, Union, List, Pattern
 
@@ -37,6 +38,39 @@ from phonemizer.separator import default_separator, Separator
 from phonemizer.utils import list2str, str2list
 
 Backend = Literal['espeak', 'espeak-mbrola', 'festival', 'segments']
+
+# Backend instances are expensive to build: initializing the espeak shared
+# library takes on the order of 200ms, which dominates the cost of
+# phonemizing short texts. Because phonemize() builds a backend on every
+# call, repeated calls pay that cost every time. The instances are stateless
+# with respect to the text being phonemized, so they are cached here and
+# reused across calls with identical parameters.
+_BACKENDS_CACHE: 'OrderedDict[tuple, BaseBackend]' = OrderedDict()
+
+_CACHE_MAX_SIZE = 8
+"""Maximum number of backend instances kept alive simultaneously"""
+
+
+def _cached_backend(key, factory):
+    """Return a backend for `key`, building it with `factory` if needed"""
+    try:
+        backend = _BACKENDS_CACHE.pop(key)
+    except KeyError:
+        backend = factory()
+        if len(_BACKENDS_CACHE) >= _CACHE_MAX_SIZE:
+            _BACKENDS_CACHE.popitem(last=False)
+    _BACKENDS_CACHE[key] = backend
+    return backend
+
+
+def clear_backends_cache():
+    """Free the backend instances cached by phonemize()
+
+    Called for its side effect only. The cache is repopulated on the next
+    call to phonemize().
+
+    """
+    _BACKENDS_CACHE.clear()
 
 
 def phonemize(  # pylint: disable=too-many-arguments
@@ -201,9 +235,13 @@ def phonemize(  # pylint: disable=too-many-arguments
     if backend == 'espeak-mbrola' and separator.word:
         logger.warning('espeak-mbrola backend cannot preserve word separation')
 
-    # initialize the phonemization backend
+    # initialize the phonemization backend, reusing a cached instance when
+    # this exact configuration has been used before. The logger is part of
+    # the key because backends hold on to it.
     if backend == 'espeak':
-        phonemizer = BACKENDS[backend](
+        key = (backend, language, str(punctuation_marks), preserve_punctuation,
+               with_stress, tie, language_switch, words_mismatch, logger)
+        phonemizer = _cached_backend(key, lambda: BACKENDS[backend](
             language,
             punctuation_marks=punctuation_marks,
             preserve_punctuation=preserve_punctuation,
@@ -211,17 +249,20 @@ def phonemize(  # pylint: disable=too-many-arguments
             tie=tie,
             language_switch=language_switch,
             words_mismatch=words_mismatch,
-            logger=logger)
+            logger=logger))
     elif backend == 'espeak-mbrola':
-        phonemizer = BACKENDS[backend](
+        key = (backend, language, logger)
+        phonemizer = _cached_backend(key, lambda: BACKENDS[backend](
             language,
-            logger=logger)
+            logger=logger))
     else:  # festival or segments
-        phonemizer = BACKENDS[backend](
+        key = (backend, language, str(punctuation_marks), preserve_punctuation,
+               logger)
+        phonemizer = _cached_backend(key, lambda: BACKENDS[backend](
             language,
             punctuation_marks=punctuation_marks,
             preserve_punctuation=preserve_punctuation,
-            logger=logger)
+            logger=logger))
 
     # do the phonemization
     return _phonemize(phonemizer, text, separator, strip, njobs, prepend_text, preserve_empty_lines)

@@ -23,7 +23,7 @@ import re
 from phonemizer.backend import EspeakBackend, FestivalBackend, SegmentsBackend
 from phonemizer.punctuation import Punctuation
 from phonemizer.phonemize import phonemize
-from phonemizer.separator import Separator, default_separator
+from phonemizer.separator import default_separator
 
 # True if we are using espeak>=1.50
 ESPEAK_150 = (EspeakBackend.version() >= (1, 50))
@@ -32,7 +32,7 @@ ESPEAK_150 = (EspeakBackend.version() >= (1, 50))
 ESPEAK_149 = (EspeakBackend.version() >= (1, 49, 3))
 
 # True if we are using festival>=2.5
-FESTIVAL_25 = (FestivalBackend.version() >= (2, 5))
+FESTIVAL_25 = False if not FestivalBackend.is_available() else (FestivalBackend.version() >= (2, 5))
 
 
 @pytest.mark.parametrize(
@@ -120,6 +120,8 @@ def test_espeak():
     assert out4 == expected4
 
 
+@pytest.mark.skipif(
+    not FestivalBackend.is_available(), reason="festival not installed")
 def test_festival():
     text = 'hello, world!'
     expected1 = 'hhaxlow werld'
@@ -191,6 +193,9 @@ def test_issue_54(text, expected):
         ('festival', 'default', ['! ?', 'hey!'], ['! ? ', 'hhey! ']),
         ('festival', '!', ['! ?', 'hey!'], ['! ', 'hhey! '])])
 def test_issue55(backend, marks, text, expected):
+    if backend == "festival" and not FestivalBackend.is_available():
+        return
+
     if marks == 'default':
         marks = Punctuation.default_marks()
     language = 'cree' if backend == 'segments' else 'en-us'
@@ -217,7 +222,7 @@ def test_issue55(backend, marks, text, expected):
     'punctuation_marks, text, expected', [
         (';:,.!?¡—…"«»“”',
          'hello, ,world? ‡ 3,000, or 2.50. ¿hello?',
-         'həloʊ, ,wɜːld? θɹiː,ziəɹoʊziəɹoʊ ziəɹoʊ, ɔːɹ tuː.fɪfti. həloʊ? '),
+         'həloʊ, ,wɜːld? θɹiː θaʊzənd, ɔːɹ tuː pɔɪnt faɪv ziəɹoʊ. həloʊ? '),
         (re.compile(r"[^a-zA-ZÀ-ÖØ-öø-ÿ0-9'$@&+%\-=/\\]"),
          'hello, ,world? ‡ 3,000, or 2.50. ¿hello?',
          'həloʊ, ,wɜːld? ‡ θɹiː,ziəɹoʊziəɹoʊ ziəɹoʊ, ɔːɹ tuː.fɪfti. ¿həloʊ? '),
@@ -272,3 +277,31 @@ def test_long_document():
 def test_multiline_punctuation(text):
     phonemized = phonemize(text, preserve_punctuation=True)
     assert len(text) == len(phonemized)
+
+
+# A mark that doubles as a decimal separator must not split a number: espeak
+# then reads two separate numbers and the spoken value changes ("19,99 euro"
+# became "nineteen ninety-nine euro"). A separator next to a non-digit is
+# ordinary punctuation and is still split.
+@pytest.mark.parametrize('text,expected', [
+    ('1,5', '1,5'),
+    ('3.14', '3.14'),
+    ('19,99 euro', '19,99 euro'),
+    ('version 2.5', 'version 2.5'),
+    # first comma is a decimal separator, second is punctuation
+    ('1,5, and more', '1,5 and more'),
+    # a separator at the end of a number is punctuation
+    ('I have 42.', 'I have 42'),
+    ('42, 43', '42 43'),
+    ('line 42, column 7', 'line 42 column 7'),
+])
+def test_decimal_separator_not_split(text, expected):
+    assert Punctuation().remove(text) == expected
+
+
+@pytest.mark.parametrize('text', ['1,5 and more', '19,99 euro', 'hello, world'])
+def test_decimal_separator_preserve_restore(text):
+    punctuation = Punctuation()
+    preserved, marks = punctuation.preserve([text])
+    restored = punctuation.restore(preserved, marks, default_separator, True)
+    assert restored == [text]

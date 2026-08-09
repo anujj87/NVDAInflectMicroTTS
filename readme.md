@@ -25,7 +25,7 @@ access is ever needed.
 ## Installing
 
 1. Build the add-on (see below) or download a pre-built
-   `InflectMicroTTS-0.1.0.nvda-addon`.
+   `NVDAInflectMicroTTS-2026.1.2.nvda-addon`.
 2. Open the file with NVDA (or use NVDA menu -> Tools -> Add-on manager ->
    Install), confirm the installation and restart NVDA.
 3. In NVDA Settings -> Speech, choose **Inflect Micro v2** from the
@@ -82,7 +82,7 @@ python tools/fetch_model.py
 uv run scons
 ```
 
-This produces `InflectMicroTTS-0.1.0.nvda-addon` in the repository root.
+This produces `NVDAInflectMicroTTS-2026.1.2.nvda-addon` in the repository root.
 
 - `tools/vendor_deps.py` downloads the Windows x64 wheels for Python 3.13
   (onnxruntime, numpy, phonemizer, num2words, Unidecode and
@@ -103,6 +103,38 @@ python tools/test_synth.py
 ```
 
 This synthesizes a phrase and writes `inflect-test.wav`.
+
+## Publishing development builds (Add-on Store)
+
+Two GitHub Actions workflows are included:
+
+- `.github/workflows/dev.yml` builds a **dev-channel** release on every push
+  to the `dev` branch (or manually: Actions -> build dev addon -> Run
+  workflow). It names the add-on after the build date
+  (`NVDAInflectMicroTTS-<yyyymmdd>.0.0.nvda-addon`), sets
+  `updateChannel = dev` in the manifest, and publishes the file to a
+  rolling `dev` GitHub release so the store always has a direct download
+  URL.
+- `.github/workflows/build_addon.yml` builds stable add-ons from tags and
+  pull requests, and creates a GitHub release (with the `.nvda-addon` and
+  `.pot` files) whenever a version tag is pushed.
+
+To submit a dev build to the NVDA Add-on Store, open the
+["Add-on registration" issue form](https://github.com/nvaccess/addon-datastore/issues/new?template=registerAddon.yml)
+in the nvaccess/addon-datastore repository with:
+
+- Download URL:
+  `https://github.com/anujj87/NVDAInflectMicroTTS/releases/download/dev/NVDAInflectMicroTTS-<yyyymmdd>.0.0.nvda-addon`
+  (replace `<yyyymmdd>` with the version of the build you are submitting)
+- Source URL: `https://github.com/anujj87/NVDAInflectMicroTTS`
+- Publisher: Anuj Sharma
+- Channel: **dev**
+- License Name: GPL v2
+- License URL: https://www.gnu.org/licenses/gpl-2.0.html
+
+Your first submission requires manual approval and may take up to two
+weeks. Each subsequent dev build you want listed is submitted the same
+way (each version gets its own entry).
 
 ## How it works
 

@@ -31,7 +31,8 @@ The model, the ONNX Runtime and all other dependencies are bundled with the add-
 so the voice works fully offline.
 Speaks English with a fixed male voice at 24 kHz and offers rate, rate
 boost, volume, variation and seed settings, plus optional GPU
-acceleration via DirectML (Auto/CPU/GPU compute device choice)."""
+acceleration via DirectML (Auto/CPU/GPU compute device choice).
+i use ai agent in this addon development"""
 	),
 	# version
 	addon_version="2026.1.2",
@@ -45,12 +46,12 @@ concurrently, which the DirectML provider does not tolerate. Model inference
 is now serialized, so the preload and the first utterance never overlap."""
 	),
 	# Author(s)
-	# TODO: replace with your name and contact email before publishing.
-	addon_author="Anuj Sharma",
+	# Translators: not used (metadata only).
+	addon_author="Anuj Sharma <anujj87@hotmail.com>",
 	# URL for the add-on documentation support
-	addon_url=None,
+	addon_url="https://github.com/anujj87/NVDAInflectMicroTTS",
 	# URL for the add-on repository where the source code can be found
-	addon_sourceURL=None,
+	addon_sourceURL="https://github.com/anujj87/NVDAInflectMicroTTS",
 	# Documentation file name
 	addon_docFileName="readme.html",
 	# Minimum NVDA version supported
@@ -60,7 +61,7 @@ is now serialized, so the preload and the first utterance never overlap."""
 	# Add-on update channel (default is None, denoting stable releases,
 	# and for development releases, use "dev".)
 	# Do not change unless you know what you are doing!
-	addon_updateChannel=None,
+	addon_updateChannel="dev",
 	# Add-on license such as GPL 2
 	addon_license="GPL 2",
 	# URL for the license document the add-on is licensed under

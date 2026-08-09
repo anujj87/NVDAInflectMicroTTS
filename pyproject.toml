@@ -7,7 +7,7 @@ name = "inflect-micro-tts"
 dynamic = ["version"]
 description = "NVDA add-on providing the Inflect Micro v2 neural text-to-speech voice"
 maintainers = [
-	{name = "Your Name", email = "you@example.com"},
+	{name = "Anuj Sharma", email = "anujj87@hotmail.com"},
 ]
 requires-python = ">=3.13,<3.14"
 classifiers = [
@@ -38,7 +38,7 @@ dependencies = [
 	"pyright[nodejs]==1.1.407",
 ]
 [project.urls]
-Repository = "https://github.com/yourname/InflectMicroTTS"
+Repository = "https://github.com/anujj87/NVDAInflectMicroTTS"
 
 [tool.ruff]
 line-length = 110

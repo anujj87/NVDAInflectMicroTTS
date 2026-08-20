@@ -35,15 +35,13 @@ acceleration via DirectML (Auto/CPU/GPU compute device choice).
 i use ai agent in this addon development"""
 	),
 	# version
-	addon_version="2026.1.2",
+	addon_version="2026.1.3",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
 	addon_changelog=_(
-		"""Fixed a crash (native access violation) that could occur right after
-selecting the Inflect Micro v2 synthesizer when GPU acceleration was active:
-the background preload and the speech worker could run the DirectML sessions
-concurrently, which the DirectML provider does not tolerate. Model inference
-is now serialized, so the preload and the first utterance never overlap."""
+		"""Fixed a bug where reloading NVDA add-ons (NVDA+Ctrl+F3) caused
+multiple "Inflect Micro TTS" entries to appear in NVDA Settings.
+The settings panel is now properly cleaned up on plugin unload."""
 	),
 	# Author(s)
 	# Translators: not used (metadata only).

@@ -31,7 +31,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 	def __init__(self) -> None:
 		super().__init__()
-		# Guard against duplicate registration if the plugin is reloaded
-		# (e.g. from the Developer Scratchpad during development).
-		if InflectMicroTTSSettingsPanel not in NVDASettingsDialog.categoryClasses:
-			NVDASettingsDialog.categoryClasses.append(InflectMicroTTSSettingsPanel)
+		NVDASettingsDialog.categoryClasses.append(InflectMicroTTSSettingsPanel)
+
+	def terminate(self) -> None:
+		try:
+			NVDASettingsDialog.categoryClasses.remove(InflectMicroTTSSettingsPanel)
+		except ValueError:
+			pass
+		super().terminate()

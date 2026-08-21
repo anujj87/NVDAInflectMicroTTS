@@ -1,7 +1,7 @@
 name: build dev addon
 on:
   push:
-    branches: [ dev ]
+    branches: [dev]
   workflow_dispatch:
 
 jobs:
@@ -22,8 +22,6 @@ jobs:
           sudo apt-get install -y gettext
           uv sync
       - name: Code checks
-        # ruff check only (no --fix): linting must never rewrite files.
-        # The vendored lib/model trees are excluded via pyproject.toml.
         run: uv run ruff check .
       - name: Build development add-on
         # scons dev=yes names the add-on after the current date

@@ -136,6 +136,10 @@ Your first submission requires manual approval and may take up to two
 weeks. Each subsequent dev build you want listed is submitted the same
 way (each version gets its own entry).
 
+**Note:** If you are re-submitting after a previous attempt (e.g. issue
+#10744), reference the old issue when commenting on the new submission
+so the store team can close the original issue.
+
 ## How it works
 
 `addon/synthDrivers/inflectMicroTTS.py` is a standard NVDA `SynthDriver`.

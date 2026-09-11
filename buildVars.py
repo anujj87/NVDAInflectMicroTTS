@@ -35,13 +35,12 @@ acceleration via DirectML (Auto/CPU/GPU compute device choice).
 i use ai agent in this addon development"""
 	),
 	# version
-	addon_version="2026.1.3",
+	addon_version="2027.1.0",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
 	addon_changelog=_(
-		"""Fixed a bug where reloading NVDA add-ons (NVDA+Ctrl+F3) caused
-multiple "Inflect Micro TTS" entries to appear in NVDA Settings.
-The settings panel is now properly cleaned up on plugin unload."""
+		""" new nvda 2027.1. support 
+"""
 	),
 	# Author(s)
 	# Translators: not used (metadata only).
@@ -55,7 +54,7 @@ The settings panel is now properly cleaned up on plugin unload."""
 	# Minimum NVDA version supported
 	addon_minimumNVDAVersion="2026.1.0",
 	# Last NVDA version supported/tested
-	addon_lastTestedNVDAVersion="2026.1.0",
+	addon_lastTestedNVDAVersion="2027.1.0",
 	# Add-on update channel (default is None, denoting stable releases,
 	# and for development releases, use "dev".)
 	# Do not change unless you know what you are doing!
